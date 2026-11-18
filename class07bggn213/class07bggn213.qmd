@@ -1,0 +1,474 @@
+---
+title: "Class 7: Machine Learning 1"
+author: Quinn Nemeth
+format: pdf
+toc: TRUE
+---
+
+## Background: Unsupervised Learning
+Today we will explore some unsupervised machine learning methods that are very popular in bioinformatics, including clustering (finding groups of data) and dimensionality reduction methods.
+
+## K-means clustering
+
+The main function in "base R" for K-means clustering is called `kmeans()`. The input for this function can just be your data. It will calculate a distance matrix and try to categorize your data into a specified number (K) of groups.
+
+Before going too deep, let's make up some data cluster where we know what the answer should be. For this, we can use the `rnorm()` function, which is a bit like `sample()`. 
+
+The `rnorm()` function has only one required input, which is the number of outputs `n` that you want to be randomly drawn from a normal distribution. You can also optionally input the standard deviation `sd` and/or the `mean`. 
+
+```{r}
+rnorm(10)
+hist(rnorm(10000))
+```
+
+> Q. Return 30 numbers centered at +3 and another 30 centered at -3:
+
+```{r}
+x <- c(rnorm(30, mean = 3), rnorm(30, mean = -3))
+x
+```
+
+The `rev()` function reverses the order of the elements in a vector. The `cbind()` function combines vectors as different columns, and the `rbind` function combines vectors together as different rows.
+```{r}
+z <- cbind(x = x, y = rev(x))
+z
+
+a <- rbind(x = x, y = rev(x))
+```
+
+Let's plot `z` with base R:
+```{r}
+plot(z)
+```
+
+Now let's use `kmeans` with `z`. There are two required inputs: the data (`x`) and the number of clusters (`centers`).
+
+```{r}
+k <- kmeans(z, 2)
+k
+```
+
+>Q. How do you get at the main clustering result (i.e. the "clustering vector", "membership vector", or "cluster")?
+
+```{r}
+k$size
+k$cluster
+k$centers
+
+```
+
+>Q. Make a results figure showing our data colored by cluster membership. For bonus points, add the cluster centers in a different color.
+
+```{r}
+plot(z, col = k$cluster)
+points(k$centers, col = "blue", pch = 15, cex = 1.5)
+```
+
+> Q. run K-means again and cluster into 4 groups. Show the results in the same kind of figure.
+
+```{r}
+w <- kmeans(z, 4)
+w$cluster
+w$centers
+plot(z, col = w$cluster)
+points(w$centers, col = "blue", pch = 15, cex = 1.5)
+```
+
+The algorithm is imposing a structure on your data because you told it to, but it doesn't necessarily represent the *true* structure of the data. 
+
+> Q. Run K-means with different values of `centers` between 1 and 10. 
+
+```{r}
+ans <- NULL
+
+for(i in 1:10) {
+  d <- kmeans(z, centers = i)
+  ans <- c(ans, d$tot.withinss)
+}
+ans
+```
+
+`d$tot.withinss` measures how compact the clusters are by adding up the distance from the center for each point. A lower number means a more compact cluster. 
+
+```{r}
+plot(ans, typ = "o")
+```
+
+The "scree" or "elbow" point is where you get maximum benefit with minimum clusters. In this plot, it's at 2 clusters. 
+
+
+## Hierarchical Clustering
+
+There are two ways you can do hierarchical clustering: bottom-up and top-down. Bottom-up is generally the default/main one. 
+
+The benefits of this method are that it allows us to use measures of similarity other than euclidean distance, and that it does not require us to input a set number of groups. 
+
+The main function for hierarchical clustering in base R is called `hclust()`.
+
+This function does not take our "raw" data directly, but rather you must provide it with a *distance matrix*. We can use the `dist()` function to create a euclidean distance matrix containing all the pairwise distances between points. The matrix given by `dist()` can then be used for the input of `hclust()`.
+
+
+```{r}
+d <- dist(z)
+hc <- hclust(d)
+hc
+```
+
+Plotting `hc` with base R will give us a dendrogram: 
+
+```{r}
+plot(hc)
+abline(h = 8, col = "red")
+```
+Our data is separated into two main groups-- we can figure this out by looking for the "biggest goal" or largest distance between branches/crossbars. Looking at the "biggest goal" (which we've separated out with a red line), there are two main branches. The first 30 numbers are all on one side/stemming from one branch of the plot, and the last 30 are on the other. This aligns with what we know about our data. 
+
+Like we did with the `abline()` on our plot, we can "cut" our tree at a given height (`h`) or number of branches (`k`) to yield groupings (i.e. clusters). In R we do this with the `cutree()` function. 
+
+```{r}
+cutree(hc, h = 8)
+grps <- cutree(hc, k = 2)
+```
+
+>Q. Make a results figure of our data `z` colored by our hierarchical clustering results.
+
+```{r}
+plot(z, col = grps)
+```
+
+## Background: Principle Component Analysis
+
+Principal component analysis (PCA) projects features onto principal components. Principal components (PCs) are lines through the data. The goal is to reduce the number of things that you have to look at; i.e., PCA aims to reduce the features dimensionality while only losing a small amount of information. You are trying to visualize the variance (spread) of the data. 
+
+> Note: it's princip**al**, not principle.
+
+Principal components are new low dimensional axes (or surfaces) closest to the observations. Basically, they are lines of best fit. 
+
+The data have maximum variance among the first PC. The next PC will try to capture the maximum amount of variance remaining. 
+
+Other than visualizing groupings, PCA can also be really useful to identify outliers.
+
+## UK Foods PCA
+
+Read in the data:
+```{r}
+url <- "https://tinyurl.com/UK-foods"
+x <- read.csv(url, row.names = 1)
+```
+
+> Q1. How many rows and columns are in your new data frame named x? What R functions could you use to answer this questions?
+
+```{r}
+nrow(x)
+ncol(x)
+```
+
+> Q2. Which approach to solving the ‘row-names problem’ mentioned above do you prefer and why? Is one approach more robust than another under certain circumstances?
+
+I prefer the second approach (used above) that adds a argument to the `read.csv()` function, because it is more efficient than reading in the file and then setting the row names in two different steps/with two different functions. It is also less risky, because running the first approach multiple times will continue removing more and more columns from the dataframe every time you run it. 
+
+### Trying "Regular" Plots
+
+Make a bar plot with base R:
+```{r}
+barplot(as.matrix(x), beside=T, col=rainbow(nrow(x)))
+```
+
+> Q3: Changing what optional argument in the above barplot() function results in the following plot?
+
+```{r}
+barplot(as.matrix(x), beside=F, col=rainbow(nrow(x)))
+```
+Setting `beside` to `F` results in a stacked bar plot. 
+
+Now, let's try making a bar plot with ggplot instead.
+
+First, we need to change the data from "wide" format to "long" format with the `tidyr` function `pivot_longer()`. 
+```{r}
+library(tidyr)
+x_long <- x |> 
+          tibble::rownames_to_column("Food") |> 
+          pivot_longer(cols = -Food, 
+                       names_to = "Country", 
+                       values_to = "Consumption")
+
+dim(x_long)
+
+```
+
+Then, we can create the bar plot with ggplot.
+```{r}
+library(ggplot2)
+
+ggplot(x_long) +
+  aes(x = Country, y = Consumption, fill = Food) +
+  geom_col(position = "dodge") +
+  theme_bw()
+```
+
+> Q4: Changing what optional argument in the above ggplot() code results in a stacked barplot figure?
+
+```{r}
+ggplot(x_long) +
+  aes(x = Country, y = Consumption, fill = Food) +
+  geom_col(position = "stack") +
+  theme_bw()
+```
+Setting the argument `position` to `"stack"` results in a stacked bar plot.
+
+Now, let's try making a pair plot. Pair plots, AKA scatterplot matrices, are collections of bivariate scatter plots used to visualize relationships between multiple variables simultaneously. 
+
+> Q5: We can use the pairs() function to generate all pairwise plots for our countries. Can you make sense of the following code and resulting figure? What does it mean if a given point lies on the diagonal for a given plot?
+
+```{r}
+pairs(x, col=rainbow(nrow(x)), pch=16)
+```
+If a point is on the diagonal, its value is closer to the center/0/normal/average of the PC axis in question. The further a point is from the diagonal, the more it variance it exhibits on that particular axis.  
+
+
+We can also try visualizing the data with a "heatmap" plot using the `pheatmap` package.
+
+```{r}
+library("pheatmap")
+pheatmap(x)
+```
+
+> Q6. Based on the pairs and heatmap figures, which countries cluster together and what does this suggest about their food consumption patterns? Can you easily tell what the main differences between N. Ireland and the other countries of the UK in terms of this data-set?
+
+With these figures, it's still really difficult to say anything definitive about how the countries cluster together or differ from each other. It's hard to tell what the main differences are or between which countries. It feels like a lot of attempted interpretation of these plots would end up being somewhat subjective, in a way that's definitely not ideal for drawing any real conclusions. 
+
+### PCA to the Rescue
+
+The main function for PCA in base R is called `prcomp()`. This function is very unfriendly, but if you can use this you can use anything.
+
+This function views the rows as observations and the columns as variables. Therefore, if we want to evaluate the different foods as our variables, we will need to take the transpose (`t()`) of our data. The transpose function makes the rows into columns.
+
+```{r}
+t(x)
+pca <- prcomp(t(x))
+```
+
+There's two main kind of results figures that we can make: a PC plot (general results figure), and a loadings plot (tells us what is contributing to the difference between groups).
+
+```{r}
+library(ggplot2)
+```
+
+First, let's make our main PC plot.
+
+This is the plot we made in class:
+```{r}
+ggplot(pca$x) +
+  aes(PC1, PC2) +
+  geom_point(col = c("orange", "red", "blue", "darkgreen"))
+```
+
+>Q7. Complete the code below to generate a plot of PC1 vs PC2. The second line adds text labels over the data points.
+
+```{r}
+df <- as.data.frame(pca$x)
+df$Country <- rownames(df)
+
+# Plot PC1 vs PC2 with ggplot
+ggplot(pca$x) +
+  aes(x = PC1, y = PC2, label = rownames(pca$x)) +
+  geom_point(size = 3) +
+  geom_text(vjust = -0.5) +
+  xlim(-270, 500) +
+  xlab("PC1") +
+  ylab("PC2") +
+  theme_bw()
+```
+
+> Q8. Customize your plot so that the colors of the country names match the colors in our UK and Ireland map and table at start of this document.
+
+```{r}
+ggplot(pca$x) +
+  aes(x = PC1, y = PC2, label = rownames(pca$x)) +
+  geom_point(size = 3, col = c("orange", "red", "blue", "darkgreen")) +
+  geom_text(vjust = -0.5, col = c("orange", "red", "blue", "darkgreen")) +
+  xlim(-270, 500) +
+  xlab("PC1") +
+  ylab("PC2") +
+  theme_bw()
+```
+
+We can use the square of pca$sdev , which stands for “standard deviation”, to calculate how much variation in the original data each PC accounts for.
+
+```{r}
+v <- round( pca$sdev^2/sum(pca$sdev^2) * 100 )
+v
+```
+Or, we can look at the second row (Proportion of Variance) of `summary()`:
+```{r}
+z <- summary(pca)
+z$importance
+```
+
+We can visualize this with a scree plot, which shows the variances with respect to the PC #. 
+
+```{r}
+variance_df <- data.frame(
+  PC = factor(paste0("PC", 1:length(v)), levels = paste0("PC", 1:length(v))),
+  Variance = v
+)
+
+ggplot(variance_df) +
+  aes(x = PC, y = Variance) +
+  geom_col(fill = "steelblue") +
+  xlab("Principal Component") +
+  ylab("Percent Variation") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 0))
+```
+
+Then, let's plot the "loading scores", i.e., how the original variables contribute to the PCs. In this case, we'll use PC1. The component `pca$rotation` (from `prcomp()`) gives numeric values for how much a variable contributed to the PC. High values = high contribution.
+
+This is the version we made in class:
+```{r}
+ggplot(pca$rotation) +
+  aes(PC1, row.names(pca$rotation)) +
+  geom_col()
+```
+
+This is the version from the handout:
+```{r}
+ggplot(pca$rotation) +
+  aes(x = PC1, 
+      y = reorder(rownames(pca$rotation), PC1)) +
+  geom_col(fill = "steelblue") +
+  xlab("PC1 Loading Score") +
+  ylab("") +
+  theme_bw() +
+  theme(axis.text.y = element_text(size = 9))
+```
+
+Now, we can see which foods "push" countries to either side of the plot. N. Ireland is on the right side of the PCA plot, so we want to look for the high positive values on the loadings plot. We can see that `Fresh_potatoes` and `Soft_drinks` are the two most significant contributors for this. 
+
+> Q9: Generate a similar ‘loadings plot’ for PC2. What two food groups feature prominantely and what does PC2 maninly tell us about?
+
+```{r}
+ggplot(pca$rotation) +
+  aes(x = PC2, 
+      y = reorder(rownames(pca$rotation), PC2)) +
+  geom_col(fill = "steelblue") +
+  xlab("PC2 Loading Score") +
+  ylab("") +
+  theme_bw() +
+  theme(axis.text.y = element_text(size = 9))
+```
+Here, we can see that a country being closer to the top of the PC2 axis on our PCA plot is mainly driven by `Soft_drinks`. So, we can tell that Scotland probably consumes a significantly different amount of soft drinks than the other three countries. Then, we can also see that a country being closer to the bottom of the PC2 axis on the PCA plot is mainly driven by `Fresh_potatoes`. This tells us that Wales probably consumes a significantly different amount of fresh potatoes than the other three countries.
+
+## PCA of RNA-seq Data
+
+Read in the data:
+```{r}
+url2 <- "https://tinyurl.com/expression-CSV"
+rna.data <- read.csv(url2, row.names=1)
+head(rna.data)
+```
+
+> Q10: How many genes and samples are in this data set? How many PCs do you think it will take to have a useful overview of this data set (see below)?
+
+```{r}
+nrow(rna.data)
+ncol(rna.data)
+```
+There are 100 genes and 10 samples. We can explore our PCA to figure out how many PCs are needed for a useful overview. 
+
+Take the transpose of the data, and then use `prcomp()`:
+```{r}
+pca <- prcomp(t(rna.data), scale=TRUE)
+```
+
+Create the dataframe for plotting:
+```{r}
+df <- as.data.frame(pca$x)
+df$Sample <- rownames(df)
+```
+
+Then, do the PCA and plot with `ggplot`:
+```{r}
+ggplot(df) +
+  aes(x = PC1, y = PC2, label = Sample) +
+  geom_point(size = 3) +
+  geom_text(vjust = -0.5, size = 3) +
+  xlab("PC1") +
+  ylab("PC2") +
+  theme_bw()
+```
+
+We can immediately tell that the wt (wildtype) and ko (knockout) samples have separated in to two groups. Let's take a look at how much variation each PC represents:
+
+```{r}
+summary(pca)
+```
+
+PC1 alone represents 92.6% of the variation, meaning nearly all of the variation in our dataset has been reduced down to a single dimension (from 100!). To now directly answer the second part of Q10, only 1 PC is needed.
+
+We can then obtain a scree plot to visualize this data.
+
+Calculate the variance explained by each PC:
+```{r}
+pca.var <- pca$sdev^2
+pca.var.per <- round(pca.var/sum(pca.var)*100, 1)
+```
+
+Create a dataframe for the scree plot:
+```{r}
+scree_df <- data.frame(
+  PC = factor(paste0("PC", 1:10), levels = paste0("PC", 1:10)),
+  Variance = pca.var[1:10]
+)
+```
+
+Plot with `ggplot`:
+```{r}
+ggplot(scree_df) +
+  aes(x = PC, y = Variance) +
+  geom_col(fill = "steelblue") +
+  ggtitle("Quick scree plot") +
+  xlab("Principal Component") +
+  ylab("Variance") +
+  theme_bw()
+```
+
+We can also make a version showing percent variation:
+
+```{r}
+pca.var.per
+scree_pct_df <- data.frame(
+  PC = factor(paste0("PC", 1:10), levels = paste0("PC", 1:10)),
+  PercentVariation = pca.var.per[1:10]
+)
+
+ggplot(scree_pct_df) +
+  aes(x = PC, y = PercentVariation) +
+  geom_col(fill = "steelblue") +
+  ggtitle("Scree Plot") +
+  xlab("Principal Component") +
+  ylab("Percent Variation") +
+  theme_bw()
+```
+
+Finally, we can make our main plot a bit nicer looking with some extra stuff:
+
+```{r}
+## A vector of colors for wt and ko samples
+colvec <- colnames(rna.data)
+colvec[grep("wt", colvec)] <- "red"
+colvec[grep("ko", colvec)] <- "blue"
+
+# Add condition to data frame
+df$condition <- substr(df$Sample, 1, 2)
+df$color <- colvec
+
+ggplot(df) +
+  aes(x = PC1, y = PC2, color = color, label = Sample) +
+  geom_point(size = 3) +
+  geom_text(vjust = -0.5, hjust = 0.5, show.legend = FALSE) +
+  scale_color_identity() +
+  xlab(paste0("PC1 (", pca.var.per[1], "%)")) +
+  ylab(paste0("PC2 (", pca.var.per[2], "%)")) +
+  theme_bw()
+```
+

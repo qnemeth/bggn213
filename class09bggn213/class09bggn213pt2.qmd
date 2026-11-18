@@ -1,0 +1,89 @@
+---
+title: "Class 9 Part 2: Comparative Structure Analysis"
+author: "Quinn Nemeth"
+format: html
+toc: TRUE
+---
+
+## Background
+
+New functions:
+
+- `get.seq()`: retrieves a sequence; input = database identifier
+- `blast.pdb()` & `get.pdb()`: PDB search & homologous structure set; find and download all related structures
+- `pdbaln()`: align and superpose all structures
+- `pca()`: PCA function that returns score plot (conformer plot) & loadings (dispacement trajectory)
+
+Today we will perform PCA of protein structural data from PDB.
+
+## Set-up
+
+Load up the packages we will use:
+```{r, message = FALSE}
+# install.packages("BiocManager")
+# BiocManager::install("msa")
+library(bio3d)
+library(ggplot2)
+library(msa)
+library(bio3dview)
+```
+
+
+## Getting a sequence
+
+We will start with a single sequence ID/accession number. 
+```{r}
+id <- "1ake_A"
+```
+
+Retrieve the sequence:
+```{r}
+aa <- get.seq(id)
+```
+
+> Side note: to do a BLAST or HMMER search, use: `b <- blast.pdb(aa)`. You could then plot a summary of the search results with `hits <- plot(b)`.
+
+```{r}
+hits <- NULL
+hits$pdb.id <- c('1AKE_A','6S36_A','6RZE_A','3HPR_A','1E4V_A','5EJE_A','1E4Y_A','3X2S_A','6HAP_A','6HAM_A','4K46_A','3GMT_A','4PZL_A')
+```
+
+Download related PDB files:
+```{r, message = FALSE}
+files <- get.pdb(hits$pdb.id, path="pdbs", split=TRUE, gzip=TRUE)
+```
+
+Align & superpose structures:
+```{r, message = FALSE}
+pdbs <- pdbaln(files, fit = T, exefile = "msa")
+```
+
+View the superposed structures:
+```{r}
+view.pdbs(pdbs, colorScheme = "residueIndex")
+```
+
+We can now take the output of `pdbaln()` and pass it to `pca()`.
+
+```{r}
+pc.xray <- pca(pdbs)
+plot(pc.xray)
+```
+This returns 3 score plots and a scree plot. Based on these plots, we can see that the first two PCs capture over 95% of the variance. So, let's plot just those two.
+
+```{r}
+plot(pc.xray, 1:2)
+```
+Let's also visualize the PCA results in the protein structure:
+```{r}
+view.pca(pc.xray)
+```
+We can write a "trajectory" (short animation) for viewing in Mol-star.
+```{r}
+mktrj(pc.xray, file = "pca_result.pdb")
+```
+
+
+
+
+

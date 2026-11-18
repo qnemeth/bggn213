@@ -1,0 +1,270 @@
+---
+title: "Class 05: Data Visualization with ggplot"
+author: "Quinn Nemeth"
+format: pdf
+toc: true
+---
+
+### Background
+
+Today we are going to learn all about the **ggplot2** package in R. 
+
+There are tons of graphics packages in R (over 250). These include "base R graphics" (like the `plot()` function we used last class) and add on packages like **ggplot2**.
+
+### Base Graphics
+
+First, we need some data to plot. We can use a built-in data frame (2D matrix) that comes with R: `cars`. 
+
+Note: writing `toc: true` creates a table of contents with hyperlinks to different sections.
+
+Click the green square with "+C" on it to create a code chunk. You can also use the shortcut "option + command + I".
+
+```{r}
+head(cars)
+```
+The default amount of rows returned by the `head()` function is 6. You can alter the amount of rows by writing, for example, `head(cars, 3)`.
+
+```{r}
+plot(cars)
+```
+R knows to take the first column as the x-axis and the second column as the y-axis.
+
+### Experimenting with ggplot
+
+Now, let's try it with ggplot. First, we need to install the package using `install.packages()`. 
+
+> We don't want to run `install.packages("ggplot2")` in the quarto document because then it will re-install the package every time we render the report.
+
+Instead, we can type in the console.
+
+You don't always want to use all of your packages all of the time, just like you don't need every book in a library at the same time. So, use the `library()` function to call up the package(s) that you need.
+
+```{r}
+library("ggplot2")
+ggplot(cars)
+```
+
+This just gives us a blank square, because ggplot needs more information.
+
+Every ggplot needs at least 3 things: 
+
+- The **data**: the data.frame we want to plot from
+- The **aesthetics**: how the columns of the data map to the plot
+- The **geometry**: how you want the plot to be drawn (points, lines, etc.)
+
+```{r}
+ggplot(data = cars) + 
+  aes(x = speed, y = dist) +
+  geom_point()
+```
+
+Now we have a pretty basic plot. We can add different functions to improve it. There are hundreds of different `geom` functions that you can use to draw the plot differently. For example, let's try to add a trend-line.
+
+```{r}
+ggplot(data = cars) + 
+  aes(x = speed, y = dist) +
+  geom_point() +
+  geom_smooth()
+```
+
+You can add additional arguments to `geom_smooth` to change the trend-line.
+
+```{r}
+ggplot(data = cars) + 
+  aes(x = speed, y = dist) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+To change the appearance of the plot, you can add even more functions.
+
+```{r}
+ggplot(data = cars) + 
+  aes(x = speed, y = dist) +
+  geom_point() +
+  geom_smooth(method = "lm") + 
+  theme_bw() +
+  labs (x = "Speed (MPH", 
+        y = "Stopping Distance (ft)",
+        title = "Silly Plot of Stopping Distances")
+
+```
+
+> We may have to do a bit more work to get basic plots at first, but ggplot actually saves time & effort in the long run.
+
+### Creating a Scatterplot
+
+Read the data from online:
+
+```{r}
+url <- "https://bioboot.github.io/bimm143_S20/class-material/up_down_expression.txt"
+genes <- read.delim(url)
+head(genes)
+```
+
+Let's start with making a basic plot, and then we can make it better after we have something to work with.
+
+```{r}
+ggplot(genes) +
+  aes(x = Condition1, y = Condition2) +
+  geom_point()
+```
+
+We can do some coding to find out more about our dataset, and what we might want to highlight in our plot.
+
+> Q. How many genes are in this dataset?
+
+```{r}
+nrow(genes)
+```
+
+> Q. How many are up-regulated?
+
+Check out the dataset:
+```{r}
+head(genes)
+``` 
+
+What categories are there in "State"? How many rows are in the "up" category?
+```{r} 
+table(genes$State)
+```
+
+You can use the following function to convert to a binary/logical set:  
+```{r}
+head(genes$State == "up")
+```
+
+...and then take the sum of the number of "TRUE"s:
+```{r}
+sum(genes$State == "up")
+```
+
+
+> Q. What percentage of genes are down-regulated?
+
+```{r}
+downdecimal <- sum(genes$State == "down") / nrow(genes)
+n.down <- downdecimal*100
+n.down
+
+#or
+n.total <- nrow(genes)
+n.down <- sum(genes$State == "down")
+percent.down <- n.down/n.total*100
+ans <- round(percent.down, 4)
+ans
+```
+
+Let's try to color our scatterplot based on "State". We can also add a custom set of colors for the different states.
+
+```{r}
+ggplot(genes) +
+  aes(x = Condition1, y = Condition2, col = State) +
+  geom_point() +
+  scale_colour_manual(values = c("mediumpurple", "deeppink4", "royalblue3"))
+```
+
+Now let's add some labels.
+
+```{r}
+geneplot <- ggplot(genes) +
+  aes(x = Condition1, y = Condition2, col = State) +
+  geom_point() +
+  scale_colour_manual(values = c("mediumpurple", "hotpink2", "royalblue3")) +
+  labs (x = "Control (no drug)", 
+        y = "Drug treated",
+        title = "Gene expression changes upon drug treatment",
+        subtitle = "GLP1 inhibitor") +
+  theme_bw()
+geneplot
+```
+Instead of typing out the same thing every time, you can assign the plot to an object, and then modify that object. For example:
+
+```{r}
+myplot <- ggplot(cars) + 
+  aes(x = speed, y = dist) +
+  geom_point()
+myplot + theme_bw()
+```
+
+We can also install additional packages to 'mod' ggplot. Let's try combining four different plots into one figure with `patchwork`.
+
+```{r}
+#install.packages("patchwork")
+library(patchwork)
+
+# Setup some example plots 
+p1 <- ggplot(mtcars) + geom_point(aes(mpg, disp))
+p2 <- ggplot(mtcars) + geom_boxplot(aes(gear, disp, group = gear))
+p3 <- ggplot(mtcars) + geom_smooth(aes(disp, qsec))
+p4 <- ggplot(mtcars) + geom_bar(aes(carb))
+
+# Use patchwork to combine them here:
+p5 <- (p1 | p2 | p3) /
+      p4
+p5
+```
+
+
+Back in base R, we can also use a function to separate our plot into multiple plots based on a particular column (State).
+
+```{r}
+geneplot +
+  facet_wrap(~State)
+```
+
+### The GapMinder Data
+
+The GapMinder dataset is rather famous and has lots of stuff that we can plot. First, we need to load in the dataset from the internet:
+
+```{r}
+# File location online
+url <- "https://raw.githubusercontent.com/jennybc/gapminder/master/inst/extdata/gapminder.tsv"
+
+gapminder <- read.delim(url)
+
+#Take a quick look at the data:
+head(gapminder)
+```
+
+>Q. How many data entries are there in this dataset?
+
+```{r}
+nrow(gapminder)
+```
+
+>Q. How many countries are in this dataset?
+
+```{r}
+length(unique(gapminder$country))
+#or
+length(levels(factor(gapminder$country)))
+```
+
+Let's try to make a plot of life expectancy compared with GDP per capita.
+
+```{r}
+le.gdp <- ggplot(gapminder) +
+  aes(x = gdpPercap, y = lifeExp, col = continent) +
+  geom_point(alpha = 0.1) +
+  scale_colour_manual(values = c("hotpink2", "steelblue3", "darkturquoise", "mediumorchid1", "darkseagreen4")) +   
+  facet_wrap(~continent)
+le.gdp
+```
+The alpha value sets transparency level. 
+
+Now let's try to make a histogram.
+
+```{r}
+ggplot(gapminder) + aes(lifeExp, fill = continent) +
+  geom_histogram()
+```
+Finally, change the geom to make a box plot.
+
+```{r}
+ggplot(gapminder) +
+  aes(lifeExp, continent, fill = continent) +
+  geom_boxplot() 
+```
+

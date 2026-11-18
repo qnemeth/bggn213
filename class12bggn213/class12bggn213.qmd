@@ -1,0 +1,273 @@
+---
+title: "Class 12: Transcriptomics & RNA-Seq Data Analysis"
+author: "Quinn Nemeth"
+format: pdf
+toc: TRUE
+---
+
+## Background & Set-Up
+
+The data for this hands-on session comes from a published RNA-seq experiment where airway smooth muscle cells were treated with dexamethasone (dex), a synthetic glucocorticoid steroid with anti-inflammatory effects.
+
+Install `DESeq2`: `BiocManager::install("DESeq2")`
+
+Data import:
+
+```{r}
+counts <- read.csv("airway_scaledcounts.csv", row.names = 1)
+metadata <- read.csv("airway_metadata.csv")
+```
+
+> Q1. How many genes are in this dataset?
+
+```{r}
+nrow(counts)
+```
+
+> Q2. How many total samples (experiments) are there, and of those how many "control" samples are there?
+
+```{r}
+ncol(counts)
+# or
+nrow(metadata)
+```
+```{r}
+sum(metadata$dex == "control")
+# or
+table(metadata$dex)
+```
+
+## Exploratory Analysis
+
+Let's extract just the "control" samples and then just the "treated" samples into two separate tables/dataframes.
+
+Make the control dataframe:
+```{r}
+control.inds <- metadata$dex == "control"
+control.counts <- counts[ , control.inds]
+```
+
+Check that the dimensions of this new dataframe look right:
+```{r}
+dim(control.counts)
+```
+
+Now, do the same thing for treated:
+```{r}
+treated.inds <- metadata$dex == "treated"
+treated.counts <- counts[ , treated.inds]
+dim(treated.counts)
+```
+
+Let's calculate the means for these two sets of samples.
+
+```{r}
+control.means <- rowMeans(control.counts)
+treated.means <- rowMeans(treated.counts)
+
+meancounts <- data.frame(control.means, treated.means)
+```
+
+Now, we can plot the means of control vs. treated samples. Points above the diagonal will indicate upregulated genes, and points below the diagonal with indicate downregulated genes.
+
+```{r}
+library(ggplot2)
+ggplot(meancounts) +
+  aes(control.means, treated.means) +
+  geom_point(alpha = 0.2) 
+```
+The data is highly skewed, resulting in severe over-plotting. So, we need to log-transform our data to make it more readable. 
+
+```{r}
+library(ggplot2)
+ggplot(meancounts) +
+  aes(control.means, treated.means) +
+  geom_point(alpha = 0.2) +
+  scale_x_log10() +
+  scale_y_log10()
+```
+
+This still isn't the most readable, so let's try something different.
+
+We often use the concept of "fold-change", which is just the log fraction of treated over control.
+
+We often use log2 to calculate fold-change, because it returns intuitive values for how much change it's representing. For example: 
+
+- log2(1) = 0, i.e., no change = 0
+- log2(2) = 1, i.e., 100% increase
+- etc. 
+
+```{r}
+log2(20/20)
+log2(40/20)
+log2(10/20)
+```
+
+Now let's apply this to our data & add it to a new column in our dataframe:
+```{r}
+meancounts$log2fc <- log2(meancounts$treated.means/meancounts$control.means)
+head(meancounts)
+```
+All of the NaN (not a number) and Inf (infinity) values are there because we didn't remove the zero count genes first.
+
+So, we can just go ahead and remove all the genes that have less than 10 counts anywhere, since these genes had either zero counts or such low counts that they aren't significant for our analysis.
+
+```{r}
+to.keep <- rowSums(meancounts[,1:2]) > 10 
+mycounts <- meancounts[to.keep, ]
+```
+
+> Q. How many genes do we have left after this filter?
+
+```{r}
+nrow(mycounts)
+```
+
+> Q8. How many genes are up-regulated with a `log2fc >= +2`?
+
+```{r}
+sum(mycounts$log2fc >= 2)
+```
+
+> Q9. How many genes are down-regulated with a `log2fc <= -2`?
+
+```{r}
+sum(mycounts$log2fc <= -2)
+```
+
+Do we trust this analysis? No, not really. We've combined all of our controls and treatments together, filtered in a very broad way, not accounted for outliers, not checked for statistical significance, and overall just lost all of the detail and nuance that we need to do a good analysis. 
+
+
+
+## DESeq Analysis
+
+Now, let's do this properly & put some stats behind these numbers. 
+
+```{r, message = FALSE}
+library(DESeq2)
+```
+
+For DESeq, we need to supply 3 things in a very specific data structure: 
+
+- countData (our counts)
+- colData (our metadata)
+- design (the setup of our experiments/what you want to compare)
+
+Properly structure our data set:
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = counts,
+                              colData = metadata,
+                              design = ~dex)
+```
+
+Run the analysis:
+```{r}
+dds <- DESeq(dds)
+```
+
+Get the results:
+```{r}
+res <- results(dds)
+head(res)
+```
+
+Note: `padj` or adjusted p-value is higher because it accounts for the multiple-testing issue. I.e., when you ask for 20,000 statistical tests and the false positive rate is 0.05, you are still getting 20,000*0.05 = 1,000 false positives. `padj` scales the p-value based on the number of genes that we are analyzing. 
+
+Save our results to a .csv:
+```{r}
+write.csv(res, file = "dex_epression_results.csv")
+```
+
+### Summary Figure
+
+Now, let's make a summary figure of our results.
+
+A Volcano plot is a common summary figure that combines log2 fold changes with adjusted p-values.
+
+```{r}
+ggplot(res) + 
+  aes(log2FoldChange, padj) +
+  geom_point()
+```
+
+The y-axis isn't very useful, since higher p-values are less significant. Additionally, the data is skewed, interfering with readability. We also can't tell easily where the points in our plot that we care about are located (i.e., fc >= 2 / fc <= -2 and p <= 0.05).
+
+Let's adjust the plot based on these issues:
+```{r}
+ggplot(res) + 
+  aes(log2FoldChange, -log(padj)) +
+  geom_point(alpha = 0.3) +
+  geom_vline(xintercept = c(+2, -2), col = "red") +
+  geom_hline(yintercept = -log(0.05), col = "red")
+```
+Now, higher y-axis values correspond to greater statistical significance, and we can identify the boundaries for significant down-regulation and up-regulation. 
+
+By adding colors, we can make it much more clear which quadrants are the ones we want to look at. 
+```{r, warning=FALSE}
+my_cols <- rep("gray", nrow(res))
+my_cols[res$log2FoldChange >= 2] <- "deeppink3"
+my_cols[res$log2FoldChange <= -2] <- "deepskyblue3"
+my_cols[res$padj > 0.05] <- "gray"
+
+# Note: make sure to put "col = my_cols" in geom_point(), not aes().
+ggplot(res) + 
+  aes(log2FoldChange, -log(padj)) +
+  geom_point(alpha = 0.3, col = my_cols) +
+  geom_vline(xintercept = c(+2, -2), col = "red") +
+  geom_hline(yintercept = -log(0.05), col = "red")
+```
+
+## Adding Annotation Data
+
+Our result table so far only contains the Ensembl gene IDs. However, alternative gene names and extra annotation are usually required for informative interpretation of our results. In this section we will add this necessary annotation data to our results.
+
+We will use one of Bioconductor’s main annotation packages to help with mapping between various ID schemes. Here we load the AnnotationDbi package and the annotation data package for humans org.Hs.eg.db.
+
+Install more `Bioconductor` packages:
+`BiocManager::install("AnnotationDbi")`
+`BiocManager::install("org.Hs.eg.db")`
+
+```{r, message = FALSE}
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+```
+
+The later of these is is the organism annotation package (“org”) for Homo sapiens (“Hs”), organized as an AnnotationDbi database package (“db”), using Entrez Gene IDs (“eg”) as primary key. To get a list of all available key types that we can use to map between, use the `columns()` function:
+```{r}
+columns(org.Hs.eg.db)
+```
+
+The main function we will use from the `AnnotationDbi` package is called `mapIds()`.
+
+We can use the `mapIds()` function to add individual columns to our results table. We provide the row names of our results table as a key, and specify that `keytype = ENSEMBL`. The column argument tells the `mapIds()` function which information we want.
+
+Map to gene symbols:
+```{r, message = FALSE}
+res$symbol <- mapIds(org.Hs.eg.db,
+              keys = rownames(res), # current IDs
+              keytype = "ENSEMBL", # current ID format
+              column = "SYMBOL") # the new format we want to map to
+```
+Add gene names and entrez IDs as new columns:
+```{r, message = FALSE}
+res$genename <- mapIds(org.Hs.eg.db,
+                       keys = rownames(res),
+                       keytype = "ENSEMBL",
+                       column = "GENENAME")
+res$entrez <- mapIds(org.Hs.eg.db,
+                       keys = rownames(res),
+                       keytype = "ENSEMBL",
+                       column = "ENTREZID")
+```
+
+Check that all the new columns worked:
+```{r}
+head(res, 1)
+```
+
+Save the data set as a .csv:
+```{r}
+write.csv(res, file = "annotated_dex_expression_results")
+```
+
+

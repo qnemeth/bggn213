@@ -1,0 +1,238 @@
+---
+title: "Creating Functions in R"
+author: Quinn Nemeth
+format: pdf
+toc: TRUE
+---
+
+## Background
+
+All functions in R have at least three things:
+
+- A **name**: we pick this and use it to call the function
+- Input **arguments**: we argue with a function to get it to do what we want; these can be one or more comma-separated inputs
+- The **body**: the lines of R code that do the work of the function
+
+## First Function
+
+Our code should be formatted as `function_name <- function() {arguments}`. Let's write a function to add some numbers.
+
+```{r}
+add <- function(x, y) {
+  x + y
+}
+```
+
+Let's test it out:
+
+```{r}
+add(1,100)
+#You could write it as add(x = 1, y =100), but R already knows that the first value is x and the second is y due to your arguments.
+add(c(1,2,10), 100)
+```
+
+Let's give our function a **default**. Function arguments can be *required* or *optional*. Right now, both our x argument and our y argument are required, because they have no fallback value to use if the user does not supply one. However, we can change our function to have a *default* that R can use if there is no y input, making the y argument *optional*.
+
+```{r}
+add <- function(x, y = 0) {
+  x + y
+}
+add(100)
+```
+
+What if we wanted to run our `add()` function on three inputs? This function currently only has two input arguments, so it would return an error. Therefore, we need to add a third argument to the function.
+
+```{r}
+add <- function(x, y = 0, z) {
+  x + y 
+}
+add(1,100,10)
+```
+
+It doesn't return an error, but the 10 still isn't added. This is because you need to add `z` to your function's body, too. However, this also means that now, you can no longer add only two inputs, since `z` is required. So, make sure to change `z` to an optional argument.
+
+```{r}
+add <- function(x, y = 0, z = 0) {
+  x + y + z
+}
+add(1,100,10)
+```
+
+> R has the ability to take any number of inputs that you don't have to spell out like our `x`, `y`, and `z` by using `...`, which is called a "dots" or "ellipses" input argument.
+
+A function will automatically return the last thing computed:
+
+```{r}
+add_silly <- function(x, y = 0, z = 0) {
+  ans <- x + y + z
+  x
+}
+add_silly(1, 100)
+```
+
+So, sometimes you will need to add a **return value**. By using `return()`, you can explicitly output/return a value from a function.
+
+```{r}
+add_silly <- function(x, y = 0, z = 0) {
+  ans <- x + y + z
+  x
+  return(ans)
+}
+add_silly(1, 100)
+```
+
+## DNA Sequence Generator
+
+Now, we're going to write a function that creates random nucleotide sequences of a user-specified length. This could be useful for creating control sequences for comparison.
+
+A useful function to start with is the base R `sample()` function.
+
+> Note: by using `?functionname` you can call up the help function, which gives you information about what a particular function does.
+
+The `sample()` function has two required input arguments:
+
+- `x`: what group of elements you want the function to choose from
+- `size`: how many items you want it to choose.
+
+```{r}
+sample(x = 1:10, size = 5)
+```
+
+Now, let's use this function to make a random di-nucleotide sequence:
+
+```{r}
+sample(x = c("A", "T", "C", "G"), size = 2)
+```
+
+If you try to set a size of 5, you get an error, because it can't take a sample larger than the population. I.e., R won't draw the same item multiple times. So, you can use `replace = TRUE` to allow duplicate characters.
+
+```{r}
+sample(x = c("A", "T", "C", "G"), size = 5, replace = TRUE)
+```
+
+Now, we can make this working piece of code into a function. We want to make the sequence length an optional input. So, we can set `seqlength` as an input argument that's equal to a default value. Then, we want to set `size` equal to `seqlength` within the body of our function.
+
+```{r}
+generate_dna <- function(seqlength = 25) {
+    sample(c("A", "T", "C", "G"), size = seqlength, replace = TRUE)
+}
+generate_dna()
+generate_dna(6)
+```
+
+We can also set a particular `seqlength` as a vector.
+
+```{r}
+x <- generate_dna(6)
+x
+```
+
+### Optional Format Switch
+
+Right now, our function returns sequences like this: `"G" "G" "A" "G" "A" "T"`, i.e., as a multi-element character vector with one nucleotide per element of the vector.
+
+We may want it to look like this instead: `"GGAGAT"`.
+
+A base R function that might help us with this is `paste()`. By using the help function (`?paste`), we can find out that `paste()` converts its arguments to character strings. Within the function, `collapse =` allows us to indicate what should be in between each pair of characters in the string. By writing `collapse = ""`, we tell R that nothing should be separating the characters.
+
+```{r}
+paste(x, collapse = "")
+```
+
+Let's incorporate this into our `generate_dna` function.
+
+```{r}
+generate_dna <- function(seqlength = 25) {
+    n <- sample(c("A", "T", "C", "G"), size = seqlength, replace = TRUE)
+    paste(n, collapse = "")
+}
+generate_dna()
+```
+
+Now, we want to make it so that the user can choose the format. For this, we can use a `TRUE/FALSE` input argument.
+
+```{r}
+generate_dna <- function(seqlength = 25, fasta = TRUE) {
+    n <- sample(c("A", "T", "C", "G"), size = seqlength, replace = TRUE)
+    cat("Hello")
+    if(fasta) {
+      cat("Goodbye")
+      n <- paste(n, collapse = "")
+    }
+    return(n)
+}
+#You can save a specific output by assigning it to a vector.
+x <- generate_dna(6, fasta = FALSE)
+x
+```
+
+The `return()` function explicitly specifies what value you want as the output. This is why R doesn't only print `"Hello"` or `"Goodbye"` from the `cat()` (print) function.
+
+We can finish making our optional FASTA format by adding a name for our random sequence.
+
+```{r}
+generate_dna <- function(seqlength = 25, fasta = TRUE) {
+    n <- sample(c("A", "T", "C", "G"), size = seqlength, replace = TRUE)
+    
+    if(fasta) {
+      id <- paste (">len", seqlength, sep = "")
+      n <- paste(n, collapse = "")
+      cat(id, "\n", n)
+    }
+    return(n)
+}
+x <- generate_dna(6)
+```
+
+## Amino Acid Sequence Generator
+
+> Q: Write a function called `generate_protein()` that makes random peptide sequences of a user-specified length in FASTA format.
+
+```{r}
+aa <- c("A", "R", "N", "D", "C", "E", "Q", "G", "H", "I", "L", "K", "M", "F", "P", "S", "T", "W", "Y", "V")
+
+generate_protein <- function(seqlength = 25, fasta = TRUE) {
+  a <- sample(aa, size = seqlength, replace = TRUE)
+  if(fasta) {
+    id <- paste(">len", seqlength, sep = "")
+    a <- paste(a, collapse = "")
+    cat(id, "\n", a, "\n")
+  }
+  return(a)
+}
+
+x <- generate_protein()
+```
+
+> Q: Use our new `generate_protein()` function to make a series of random protein sequences ranging from 6 to 13 amino acids in length.
+
+We can use a `for()` loop to answer this question.
+
+```{r}
+for(i in 6:13) {
+  x <- generate_protein(i)
+}
+```
+
+Another way to do this is with the `sapply()` function, which is very R-specific.
+
+```{r}
+sapply(6:13, generate_protein)
+```
+
+> Q: Are these sequences unique in Nature?
+
+We can figure this out by using BLASTp to search the NR database and check for any matches with both 100% coverage and 100% identity.
+
+| Length | Sequence      | \% Coverage | \% Identity | Unique |
+|--------|---------------|-------------|-------------|--------|
+| 6      | QVFSDV        | 100%        | 100%        | No     |
+| 7      | LFKGCED       | 100%        | 100%        | No     |
+| 8      | VEWSIWDN      | 100%        | 87.50%      | Yes    |
+| 9      | NTWSEMRTG     | 100%        | 88.89%      | Yes    |
+| 10     | KIKFVHHCRL    | 100%        | 76.92%      | Yes    |
+| 11     | WPMDNWCTTFH   | 82%         | 75.00%      | Yes    |
+| 12     | LGQLMCYFWTYS  | 75%         | 75%         | Yes    |
+| 13     | CCRAAKDIDKPNE | 100%        | 76.92       | Yes    |
+
+Immune-associated peptides tend to be 8-9 AAs in length, meaning that they are long enough that they are most likely unique in nature. Therefore, there are probably not random/accidental duplicates that could create an unintended immune response. 
